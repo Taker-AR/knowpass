@@ -1,4 +1,4 @@
-
+```text
 ██╗  ██╗███╗   ██╗ ██████╗ ██╗    ██╗██████╗  █████╗ ███████╗███████╗
 ██║ ██╔╝████╗  ██║██╔═══██╗██║    ██║██╔══██╗██╔══██╗██╔════╝██╔════╝
 █████╔╝ ██╔██╗ ██║██║   ██║██║ █╗ ██║██████╔╝███████║███████╗███████╗
@@ -8,7 +8,7 @@
 
               KNOWPASS - OSINT PWD GENERATOR
                       by Taker-AR
-                      
+```                    
 Know Pass es una herramienta OSINT de línea de comandos para generar diccionarios de contraseñas personalizadas, basada en la información recolectada sobre un objetivo. Es útil para analistas de seguridad en procesos de auditoría.
 
 ---

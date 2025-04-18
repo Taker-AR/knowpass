@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+## Imports
+import click
+import json
+import sys
+import os
+
+ASCII_BANNER = r"""
+██╗  ██╗███╗   ██╗ ██████╗ ██╗    ██╗██████╗  █████╗ ███████╗███████╗
+██║ ██╔╝████╗  ██║██╔═══██╗██║    ██║██╔══██╗██╔══██╗██╔════╝██╔════╝
+█████╔╝ ██╔██╗ ██║██║   ██║██║ █╗ ██║██████╔╝███████║███████╗███████╗
+██╔═██╗ ██║╚██╗██║██║   ██║██║███╗██║██╔═══╝ ██╔══██║╚════██║╚════██║
+██║  ██╗██║ ╚████║╚██████╔╝╚███╔███╔╝██║     ██║  ██║███████║███████║
+╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚══╝╚══╝ ╚═╝     ╚═╝  ╚═╝╚══════╝╚══════╝
+
+              KNOWPASS - OSINT PWD GENERATOR
+                      by Taker-AR
+"""
+
+## Generar la carpeta /perfiles
+PERFILES_DIR = os.path.expanduser("~/.knowpass/perfiles")
+os.makedirs(PERFILES_DIR, exist_ok=True)
+
+# Clase para banner
+class CustomCommand(click.Command):
+    def format_help(self, ctx, formatter):
+        click.echo(ASCII_BANNER)
+        super().format_help(ctx, formatter)
+
+# Funciones auxiliares
+
+def variantes(p):
+    p = p.strip()
+    return set([p, p.lower(), p.upper(), p.capitalize(), p.title(), p.swapcase()])
+
+def leetify(palabra):
+    leet_map = {'a': ['4', '@'], 'e': ['3'], 'i': ['1', '!'], 'o': ['0'], 's': ['5', '$'], 'g': ['9']}
+    results = set([palabra])
+    for char, subs in leet_map.items():
+        for r in list(results):
+            for sub in subs:
+                results.add(r.replace(char, sub))
+                results.add(r.replace(char.upper(), sub))
+    return results
+
+def truncar(p):
+    return [p[:3], p[-3:], p[:4], p[-4:], p[:2]+p[-2:]]
+
+def partes_fecha(fecha_str):
+    try:
+        d, m, y = fecha_str.split('/')
+        return [d, m, y, d+m, m+y, d+y, y[-2:], d+m+y]
+    except:
+        return []
+
+def recolectar_palabras(profile):
+    base = set()
+    for key, val in profile.items():
+        if isinstance(val, str):
+            base.update(variantes(val))
+            base.update(leetify(val))
+            base.update(truncar(val))
+            if 'nac' in key.lower():
+                base.update(partes_fecha(val))
+        elif isinstance(val, list):
+            for item in val:
+                base.update(variantes(item))
+                base.update(leetify(item))
+                base.update(truncar(item))
+        elif isinstance(val, dict):
+            for subkey, subval in val.items():
+                base.update(variantes(subval))
+                base.update(leetify(subval))
+                base.update(truncar(subval))
+                if 'nac' in subkey.lower():
+                    base.update(partes_fecha(subval))
+    return list(filter(None, base))
+
+def generar_combinaciones(base, chars):
+    import itertools
+    comunes = ['123', '321', '!', '.', '_', '@', '#', '2023', '2024']
+    combinaciones = set()
+
+    for palabra in base:
+        if len(palabra) <= chars:
+            combinaciones.add(palabra)
+
+    for a, b in itertools.product(base, repeat=2):
+        ab = a + b
+        if len(ab) <= chars:
+            combinaciones.add(ab)
+
+    for a, b, c in itertools.product(base, repeat=3):
+        abc = a + b + c
+        if len(abc) <= chars:
+            combinaciones.add(abc)
+
+    for palabra in base:
+        for suf in comunes:
+            comb1 = palabra + suf
+            comb2 = suf + palabra
+            if len(comb1) <= chars:
+                combinaciones.add(comb1)
+            if len(comb2) <= chars:
+                combinaciones.add(comb2)
+
+    return combinaciones
+
+def guardar_diccionario(combinaciones, output_path, preview_count=10):
+    combinaciones_ordenadas = sorted(combinaciones)
+
+    with open(output_path, 'w', encoding='utf-8') as f:
+        for linea in combinaciones_ordenadas:
+            f.write(linea + "\n")
+
+    cantidad = len(combinaciones_ordenadas)
+    preview = combinaciones_ordenadas[:preview_count]
+
+    click.echo(f"\nSe han generado {cantidad} contraseñas.")
+    click.echo(f"Preview de las primeras {len(preview)}:")
+    for i, p in enumerate(preview, start=1):
+        click.echo(f"{i}. {p}")
+
+
+## Comandos para CLI
+@click.command(cls=CustomCommand, context_settings=dict(help_option_names=["-h", "--help"]))
+@click.option('-c', '--charge', nargs=1, type=str, help='Cargar un perfil interactivo y guardarlo con ese nombre')
+@click.option('-s', '--show', nargs=1, type=str, help='Mostrar un perfil guardado')
+@click.option('-l', '--list', 'listar', is_flag=True, help='Listar todos los perfiles disponibles')
+@click.option('-r', '--remove', nargs=1, type=str, help='Eliminar un perfil guardado')
+@click.option('-g', '--generate', nargs=1, type=str, help='Generar diccionario desde un perfil')
+@click.option('--chars', default=16, type=int, help='Máximo de caracteres por contraseña (default: 16)')
+@click.option('--preview', default=10, type=int, help='Cantidad de contraseñas a mostrar como preview')
+def main(charge, show, listar, remove, generate, chars, preview):
+
+# Listar archivos de perfiles 
+    if listar:
+        archivos = [f for f in os.listdir(PERFILES_DIR) if f.endswith(".json")]
+        if archivos:
+            click.echo("Perfiles disponibles:")
+            for f in archivos:
+                nombre = os.path.splitext(f)[0]
+                click.echo(f"- {nombre}")
+        else:
+            click.echo("No se encontraron perfiles guardados.")
+        return
+# Mostrar datos del perfil 
+    if show:
+        filename = os.path.join(PERFILES_DIR, f"{show}.json")
+        if not os.path.exists(filename):
+            click.echo(f"El archivo '{filename}' no existe.")
+            sys.exit(1)
+
+        with open(filename, 'r', encoding='utf-8') as f:
+            profile = json.load(f)
+
+        click.echo(f"\n📄 Resumen del perfil '{show}':")
+        for key, value in profile.items():
+            if isinstance(value, dict):
+                if value:
+                    click.echo(f"- {key}:")
+                    for subkey, subval in value.items():
+                        click.echo(f"    {subkey}: {subval}")
+            elif isinstance(value, list):
+                if value:
+                    click.echo(f"- {key}: {', '.join(value)}")
+            else:
+                if value.strip():
+                    click.echo(f"- {key}: {value}")
+        return
+# Cargar datos del perfil 
+    if charge:
+        click.echo(ASCII_BANNER)
+        profile_name = charge.strip()
+        if not profile_name:
+            click.echo("Tenés que indicar un nombre de perfil. Ej: knowpass -c juanchi")
+            sys.exit(1)
+
+        click.echo(f"Iniciando carga de datos para el perfil '{profile_name}'...\n")
+
+        profile = {}
+
+# --- Datos del perfil objetivo ---
+        profile["nombre"] = click.prompt("Nombre")
+        profile["apellido"] = click.prompt("Apellido")
+        apodo = click.prompt("Apodo (dejar vacío si no se conoce)", default="", show_default=False)
+        if apodo.strip():
+            profile["apodo"] = apodo.strip()
+
+        nacimiento = click.prompt("Fecha de nacimiento (dd/mm/yyyy) (dejar vacío si no se conoce)", default="", show_default=False)
+        if nacimiento.strip():
+            profile["nacimiento"] = nacimiento.strip()
+
+        ciudad = click.prompt("Ciudad natal (dejar vacío si no se conoce)", default="", show_default=False)
+        if ciudad.strip():
+            profile["ciudad"] = ciudad.strip()
+
+# --- Listas múltiples ---
+        def pedir_lista(label):
+            entrada = click.prompt(f"{label} (separados por coma)", default="", show_default=False)
+            return [item.strip() for item in entrada.split(",") if item.strip()]
+
+        profile["emails"] = pedir_lista("Correo usado")
+        profile["nicknames"] = pedir_lista("Nickname / username")
+        profile["leet_words"] = pedir_lista("Palabra escrita con números (leet)")
+        profile["special_chars"] = pedir_lista("Carácter especial posible (ej: @, !, .)")
+
+# --- Otros datos personalizados ---
+        profile["otros_datos"] = {}
+        if click.confirm("¿Deseás agregar otros datos personalizados?", default=False):
+            entrada = click.prompt("Ingresá los datos en formato tipo:valor, separados por coma (ej: tía:Marta, auto:Ford)", default="", show_default=False)
+            if entrada.strip():
+                pares = [item.strip() for item in entrada.split(",") if item.strip()]
+                for par in pares:
+                    if ":" in par:
+                        tipo, valor = par.split(":", 1)
+                        profile["otros_datos"][tipo.strip()] = valor.strip()
+
+
+        def cargar_seccion(nombre, campos):
+            datos = {}
+            if click.confirm(f"¿Querés cargar datos de {nombre}?", default=False):
+                for campo in campos:
+                    valor = click.prompt(f"{campo.capitalize()} (dejar vacío si no se conoce)", default="", show_default=False)
+                    if valor.strip():
+                        datos[campo] = valor.strip()
+            return datos
+
+
+        profile["pareja"] = cargar_seccion("pareja", ["nombre", "apellido", "apodo", "nacimiento"])
+        profile["padres"] = cargar_seccion("padres", ["nombre", "apellido", "nacimiento"])
+        profile["hermanos"] = cargar_seccion("hermanos", ["nombre", "apodo", "nacimiento"])
+        profile["hijos"] = cargar_seccion("hijos", ["nombre", "apodo", "nacimiento"])
+        profile["amigos"] = cargar_seccion("amigos", ["nombre", "apodo", "nacimiento"])
+        profile["trabajo"] = cargar_seccion("trabajo", ["empresa", "puesto", "año_ingreso"])
+
+# --- Mascotas múltiples ---
+        profile["mascotas"] = []
+        if click.confirm("¿Querés cargar datos de mascotas?", default=False):
+            while True:
+                mascota = click.prompt("Nombre de la mascota")
+                profile["mascotas"].append(mascota)
+                if not click.confirm("¿Tenés otra mascota?", default=False):
+                    break
+
+# --- Confirmar y guardar ---
+        click.echo("\nResumen del perfil:")
+
+        for key, value in profile.items():
+            if isinstance(value, dict):
+                if value:  # diccionario no vacío
+                    click.echo(f"- {key}:")
+                    for subkey, subval in value.items():
+                        click.echo(f"    {subkey}: {subval}")
+            elif isinstance(value, list):
+                if value:  # lista no vacía
+                    click.echo(f"- {key}: {', '.join(value)}")
+            else:
+                if value.strip():  # string no vacío
+                    click.echo(f"- {key}: {value}")
+
+# --- Generar archivo del perfil ---
+
+        filename = os.path.join(PERFILES_DIR, f"{profile_name}.json")
+        if not click.confirm(f"\n¿Querés guardar este perfil como '{filename}'?", default=True):
+            click.echo("Operación cancelada.")
+            sys.exit(0)
+
+        if os.path.exists(filename):
+            click.confirm(f"El archivo '{filename}' ya existe. ¿Querés sobrescribirlo?", abort=True)
+
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(profile, f, indent=2, ensure_ascii=False)
+
+        click.echo(f"\nPerfil guardado como: {filename}")
+
+    else:
+        click.echo("Usá -c <nombre_perfil> para crear uno nuevo. Ej: knowpass -c juanchi")
+
+# --- GENERAR DICCIONARIO ---
+    if generate:
+        click.echo(ASCII_BANNER)
+        perfil_path = os.path.join(PERFILES_DIR, f"{generate}.json")
+        if not os.path.exists(perfil_path):
+            click.echo(f"El perfil '{generate}' no existe.")
+            sys.exit(1)
+
+        with open(perfil_path, 'r', encoding='utf-8') as f:
+            profile = json.load(f)
+
+        dic_dir = os.path.expanduser("~/.knowpass/diccionarios")
+        os.makedirs(dic_dir, exist_ok=True)
+        output_path = os.path.join(dic_dir, f"{generate}.txt")
+
+        palabras = recolectar_palabras(profile)
+        combinaciones = generar_combinaciones(palabras, chars)
+        guardar_diccionario(combinaciones, output_path, preview_count=preview)
+
+        click.echo(f"Diccionario generado: {output_path}")
+        return
+
+# Remover perfil
+    if remove:
+        filename = os.path.join(PERFILES_DIR, f"{remove}.json")
+        if not os.path.exists(filename):
+            click.echo(f"El perfil '{remove}' no existe.")
+            sys.exit(1)
+
+        if click.confirm(f"¿Estás seguro de que querés eliminar el perfil '{remove}'?", default=False):
+            os.remove(filename)
+            click.echo(f"Perfil '{remove}' eliminado correctamente.")
+        else:
+            click.echo("Operación cancelada.")
+        return
+
+if __name__ == '__main__':
+    main()
+
+
+
+
+
+
+
+
+
+

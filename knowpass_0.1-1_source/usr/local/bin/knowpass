@@ -129,6 +129,25 @@ def guardar_diccionario(combinaciones, output_path, preview_count=10):
     for i, p in enumerate(preview, start=1):
         click.echo(f"{i}. {p}")
 
+def cargar_lista_de_secciones(etiqueta, campos):
+    lista = []
+    if click.confirm(f"¿Querés cargar datos de {etiqueta}?", default=False):
+        while True:
+            datos = {}
+            for campo in campos:
+                if "nac" in campo.lower():
+                    mensaje = f"{campo.capitalize()} (formato DD/MM/AAAA, dejar vacío si no se conoce)"
+                else:
+                    mensaje = f"{campo.capitalize()} (dejar vacío si no se conoce)"
+                valor = click.prompt(mensaje, default="", show_default=False)
+                if valor.strip():
+                    datos[campo] = valor.strip()
+            if datos:
+                lista.append(datos)
+            if not click.confirm(f"¿Querés agregar otro {etiqueta[:-1]}?", default=False):
+                break
+    return lista
+
 
 ## Comandos para CLI
 @click.command(cls=CustomCommand, context_settings=dict(help_option_names=["-h", "--help"]))
@@ -236,10 +255,16 @@ def main(charge, show, listar, remove, generate, chars, preview):
 
 
         profile["pareja"] = cargar_seccion("pareja", ["nombre", "apellido", "apodo", "nacimiento"])
-        profile["padres"] = cargar_seccion("padres", ["nombre", "apellido", "nacimiento"])
-        profile["hermanos"] = cargar_seccion("hermanos", ["nombre", "apodo", "nacimiento"])
-        profile["hijos"] = cargar_seccion("hijos", ["nombre", "apodo", "nacimiento"])
-        profile["amigos"] = cargar_seccion("amigos", ["nombre", "apodo", "nacimiento"])
+        profile["padres"] = {}
+
+        if click.confirm("¿Querés cargar datos del padre?", default=False):
+            profile["padres"]["padre"] = cargar_seccion("padre", ["nombre", "apellido", "nacimiento"])
+
+        if click.confirm("¿Querés cargar datos de la madre?", default=False):
+            profile["padres"]["madre"] = cargar_seccion("madre", ["nombre", "apellido", "nacimiento"])
+        profile["hermanos"] = cargar_lista_de_secciones("hermanos", ["nombre", "apodo", "nacimiento"])
+        profile["hijos"] = cargar_lista_de_secciones("hijos", ["nombre", "apodo", "nacimiento"])
+        profile["amigos"] = cargar_lista_de_secciones("amigos", ["nombre", "apodo", "nacimiento"])
         profile["trabajo"] = cargar_seccion("trabajo", ["empresa", "puesto", "año_ingreso"])
 
 # --- Mascotas múltiples ---
@@ -323,6 +348,7 @@ def main(charge, show, listar, remove, generate, chars, preview):
 
 if __name__ == '__main__':
     main()
+
 
 
 

@@ -29,11 +29,19 @@ class CustomCommand(click.Command):
 # Funciones auxiliares
 
 def variantes(p):
-    p = p.strip()
-    return set([p, p.lower(), p.upper(), p.capitalize(), p.title(), p.swapcase()])
+    p = p.strip().replace(" ", "")
+    return set([
+        p,
+        p.lower(),
+        p.upper(),
+        p.capitalize(),
+        p.title(),
+        p.swapcase()
+    ])
 
 def leetify(palabra):
     leet_map = {'a': ['4', '@'], 'e': ['3'], 'i': ['1', '!'], 'o': ['0'], 's': ['5', '$'], 'g': ['9']}
+    palabra = palabra.replace(" ", "")
     results = set([palabra])
     for char, subs in leet_map.items():
         for r in list(results):
@@ -73,7 +81,7 @@ def recolectar_palabras(profile):
                 base.update(truncar(subval))
                 if 'nac' in subkey.lower():
                     base.update(partes_fecha(subval))
-    return list(filter(None, base))
+    return list(filter(lambda w: w and " " not in w, base))
 
 def generar_combinaciones(base, chars):
     import itertools

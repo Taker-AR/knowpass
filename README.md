@@ -11,6 +11,11 @@
 ```                    
 Know Pass es una herramienta OSINT de línea de comandos para generar diccionarios de contraseñas personalizadas, basada en la información recolectada sobre un objetivo. Es útil para analistas de seguridad en procesos de auditoría.
 
+SE DEJA EXPRESAMENTE CLARO QUE:
+
+¡¡¡¡¡Este proyecto fue creado con fines educativos y éticos. El uso indebido del mismo queda bajo la responsabilidad exclusiva del usuario!!!!!
+
+
 ---
 
 # Instalación
